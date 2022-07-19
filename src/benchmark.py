@@ -41,13 +41,16 @@ PART_SIZE = 16 * 1024 * 1024
 
 
 async def benchmark_remote(config: S3ConfigBase):
-    """TODO: Implement based on environment variables"""
+    """Run against a remote endpoint based on the given config"""
+    WithRetry.set_retries(3)
     object_storage = S3ObjectStorage(config=config)
-    benchmark_upload(object_storage=object_storage)
+    await benchmark_upload(object_storage=object_storage)
+    await benchmark_download(object_storage=object_storage)
 
 
 async def benchmark_localstack():
     """Create bucket and run up-/download benchmarks"""
+    WithRetry.set_retries(0)
     with LocalStackContainer(image="localstack/localstack:0.14.2").with_services(
         "s3"
     ) as localstack:
@@ -76,8 +79,8 @@ async def upload_object(object_storage: S3ObjectStorage, path: Path):
         bucket_id=BUCKET_ID, object_id=object_id
     )
 
-    durations = []
     with open(path, "r+b") as source:
+        duration = 0.0
         for (part_number, file_part) in enumerate(
             read_file_parts(source, part_size=PART_SIZE), start=1
         ):
@@ -89,9 +92,8 @@ async def upload_object(object_storage: S3ObjectStorage, path: Path):
                 part_number=part_number,
             )
             upload_file_part(presigned_url=part_upload_url, part=file_part)
-
-            durations.append(time.time() - upload_start)
-            average = (PART_SIZE / 1024**2) / (sum(durations) / len(durations))
+            duration = duration + time.time() - upload_start
+            average = (PART_SIZE / 1024**2) / (duration / part_number)
             print(
                 f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
                 end="",
@@ -114,8 +116,6 @@ async def benchmark_download(object_storage: S3ObjectStorage):
 
 async def download_object(object_storage: S3ObjectStorage, object_id: str):
     """TODO"""
-    durations = []
-
     input_path = DATA_DIR / object_id
     file_size = input_path.stat().st_size
     download_url = await object_storage.get_object_download_url(
@@ -133,6 +133,7 @@ async def download_object(object_storage: S3ObjectStorage, object_id: str):
     ) as target:
         # normally you'd use a for loop with enumerate, but we'd like to time
         # the actual download function which is wrapped by the generator
+        duration = 0.0
         part_number = 0
         while True:
             part_number += 1
@@ -142,8 +143,8 @@ async def download_object(object_storage: S3ObjectStorage, object_id: str):
             except StopIteration:
                 break
             target.write(file_part)
-            durations.append(time.time() - download_start)
-            average = (PART_SIZE / 1024**2) / (sum(durations) / len(durations))
+            duration = duration + time.time() - download_start
+            average = (PART_SIZE / 1024**2) / (duration / part_number)
             print(
                 f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
                 end="",
@@ -157,5 +158,12 @@ async def download_object(object_storage: S3ObjectStorage, object_id: str):
 
 if __name__ == "__main__":
     # assume localstack should be fairly reliable
-    WithRetry.set_retries(0)
     asyncio.run(benchmark_localstack())
+    cos = DATA_DIR / "s3_cos.env"
+    ceph = DATA_DIR / "s3_ceph.env"
+    if cos.exists():
+        config = S3ConfigBase(cos)
+        asyncio.run(benchmark_remote(config=config))
+    if ceph.exists():
+        config = S3ConfigBase(ceph)
+        asyncio.run(benchmark_remote(config=config))
