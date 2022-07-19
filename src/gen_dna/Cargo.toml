@@ -1,0 +1,12 @@
+[package]
+name = "gen_dna"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "3.2.10", features = ["derive"] }
+rand = "0.8.5"
