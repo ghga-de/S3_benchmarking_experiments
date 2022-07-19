@@ -9,8 +9,11 @@ jobs:
     env:
       REL_SRC_DIR_PATH: ./src
     steps:
+      - name: install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install libcurl4-openssl-dev libssl-dev
       - uses: actions/checkout@v2.4.2
-
       - name: Set up Python 3.9
         uses: actions/setup-python@v3.1.2
         with:
