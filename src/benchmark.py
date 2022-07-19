@@ -12,13 +12,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""TODO"""
+"""Functionality to benchmark up-/download for different S3 endpoints"""
 import asyncio
+import filecmp
 import os
+import sys
 import time
 from pathlib import Path
 
 from ghga_connector.core.file_operations import (  # type: ignore
+    download_file_parts,
     read_file_parts,
     upload_file_part,
 )
@@ -32,17 +35,19 @@ from testcontainers.localstack import LocalStackContainer  # type: ignore
 
 BUCKET_ID = "ghga-file-io-benchmarking"
 DATA_DIR = Path(__file__).parent.parent.resolve() / "example_data"
-FILE_PATHS = [
-    DATA_DIR / file_name
-    for file_name in os.listdir(DATA_DIR)
-    if not file_name.endswith(".md")
-]
-OBJECT_IDS: list[str] = []
+OBJECT_IDS = ["1G.fasta"]
+FILE_PATHS = [DATA_DIR / object_id for object_id in OBJECT_IDS]
 PART_SIZE = 16 * 1024 * 1024
 
 
+async def benchmark_remote(config: S3ConfigBase):
+    """TODO: Implement based on environment variables"""
+    object_storage = S3ObjectStorage(config=config)
+    benchmark_upload(object_storage=object_storage)
+
+
 async def benchmark_localstack():
-    """TODO"""
+    """Create bucket and run up-/download benchmarks"""
     with LocalStackContainer(image="localstack/localstack:0.14.2").with_services(
         "s3"
     ) as localstack:
@@ -50,16 +55,12 @@ async def benchmark_localstack():
         storage = S3ObjectStorage(config=config)
         await storage.create_bucket(BUCKET_ID)
         await benchmark_upload(object_storage=storage)
-
-
-def benchmark_remote(config: S3ConfigBase):
-    """TODO: Get config to inject from env variables"""
-    object_storage = S3ObjectStorage(config=config)
-    benchmark_upload(object_storage=object_storage)
+        await benchmark_download(object_storage=storage)
+        await storage.delete_bucket(BUCKET_ID)
 
 
 async def benchmark_upload(object_storage: S3ObjectStorage):
-    """TODO"""
+    """Call and time actual upload per file"""
     for path in FILE_PATHS:
         print(f"Uploading file {path}")
         upload_start = time.time()
@@ -88,40 +89,73 @@ async def upload_object(object_storage: S3ObjectStorage, path: Path):
                 part_number=part_number,
             )
             upload_file_part(presigned_url=part_upload_url, part=file_part)
+
             durations.append(time.time() - upload_start)
             average = (PART_SIZE / 1024**2) / (sum(durations) / len(durations))
             print(
                 f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
                 end="",
             )
-    print()
+    print("\nCompleting multipart upload")
     await object_storage.complete_multipart_upload(
         upload_id=upload_id, bucket_id=BUCKET_ID, object_id=object_id
     )
 
 
-def benchmark_download(object_storage: S3ObjectStorage):
-    """TODO"""
+async def benchmark_download(object_storage: S3ObjectStorage):
+    """Call and time actual download per file"""
     for object_id in OBJECT_IDS:
         print(f"Downloading object {object_id}")
         upload_start = time.time()
-        asyncio.run(download_object(object_storage=object_storage, object_id=object_id))
+        await download_object(object_storage=object_storage, object_id=object_id)
         elapsed = time.time() - upload_start
         print(f"Download for object {object_id} finished in {elapsed:.2f}s")
 
 
-async def download_object(
-    object_storage: S3ObjectStorage, object_id: str
-):  # pylint: disable=unused-argument
+async def download_object(object_storage: S3ObjectStorage, object_id: str):
     """TODO"""
     durations = []
-    download_start = time.time()
-    # Place function call here
-    durations.append(time.time() - download_start)
-    average = (PART_SIZE / 1024**2) / (sum(durations) / len(durations))
-    print(f"Average transfer rate: {average:.2f} MiB/s", end="")
+
+    input_path = DATA_DIR / object_id
+    file_size = input_path.stat().st_size
+    download_url = await object_storage.get_object_download_url(
+        bucket_id=BUCKET_ID, object_id=object_id
+    )
+    file_parts = download_file_parts(
+        download_url=download_url, part_size=PART_SIZE, total_file_size=file_size
+    )
+
+    output_path = input_path.name.replace(".fasta", "_dl.fasta")
+    with open(
+        output_path,
+        "wb",
+        buffering=PART_SIZE,
+    ) as target:
+        # normally you'd use a for loop with enumerate, but we'd like to time
+        # the actual download function which is wrapped by the generator
+        part_number = 0
+        while True:
+            part_number += 1
+            download_start = time.time()
+            try:
+                file_part = next(file_parts)
+            except StopIteration:
+                break
+            target.write(file_part)
+            durations.append(time.time() - download_start)
+            average = (PART_SIZE / 1024**2) / (sum(durations) / len(durations))
+            print(
+                f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
+                end="",
+            )
+    print("\nRunning cleanup ...")
+    await object_storage.delete_object(bucket_id=BUCKET_ID, object_id=object_id)
+    if not filecmp.cmp(input_path, output_path):
+        print(f"Input and output different for {input_path}", file=sys.stderr)
+    os.remove(output_path)
 
 
 if __name__ == "__main__":
+    # assume localstack should be fairly reliable
     WithRetry.set_retries(0)
     asyncio.run(benchmark_localstack())
