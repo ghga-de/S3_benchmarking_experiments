@@ -50,6 +50,7 @@ async def benchmark_remote(config: S3ConfigBase):
 
 async def benchmark_localstack():
     """Create bucket and run up-/download benchmarks"""
+    # assume localstack should be fairly reliable
     WithRetry.set_retries(0)
     with LocalStackContainer(image="localstack/localstack:0.14.2").with_services(
         "s3"
@@ -157,13 +158,10 @@ async def download_object(object_storage: S3ObjectStorage, object_id: str):
 
 
 if __name__ == "__main__":
-    # assume localstack should be fairly reliable
     asyncio.run(benchmark_localstack())
     cos = DATA_DIR / "s3_cos.env"
     ceph = DATA_DIR / "s3_ceph.env"
     if cos.exists():
-        config = S3ConfigBase(cos)
-        asyncio.run(benchmark_remote(config=config))
+        asyncio.run(benchmark_remote(config=S3ConfigBase(cos)))
     if ceph.exists():
-        config = S3ConfigBase(ceph)
-        asyncio.run(benchmark_remote(config=config))
+        asyncio.run(benchmark_remote(config=S3ConfigBase(ceph)))
