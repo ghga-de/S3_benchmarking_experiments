@@ -195,7 +195,6 @@ async def download_object(
     await object_storage.delete_object(bucket_id=bucket_id, object_id=object_id)
     if not filecmp.cmp(input_path, output_path):
         print(f"Input and output different for {input_path}", file=sys.stderr)
-    print(output_path)
     os.remove(output_path)
 
 
