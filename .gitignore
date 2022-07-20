@@ -131,4 +131,5 @@ dmypy.json
 # ingore vscode settings:
 .vscode/
 
-example_data/
+example_data/*.fasta
+example_data/*.env
