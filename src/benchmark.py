@@ -110,14 +110,13 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
     )
     # refactor this
     # Clean up multipart upload if we run into any exception here
+    upload_start = time.time()
     total_parts = 0
     try:
         with open(path, "r+b") as source:
-            duration = 0.0
             for (part_number, file_part) in enumerate(
                 read_file_parts(source, part_size=PART_SIZE), start=1
             ):
-                upload_start = time.time()
                 part_upload_url = await object_storage.get_part_upload_url(
                     upload_id=upload_id,
                     bucket_id=bucket_id,
@@ -125,7 +124,7 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
                     part_number=part_number,
                 )
                 upload_file_part(presigned_url=part_upload_url, part=file_part)
-                duration = duration + time.time() - upload_start
+                duration = time.time() - upload_start
                 average = (PART_SIZE / 1024**2) / (duration / part_number)
                 print(
                     f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
@@ -180,17 +179,11 @@ async def download_object(
     ) as target:
         # normally you'd use a for loop with enumerate, but we'd like to time
         # the actual download function which is wrapped by the generator
-        duration = 0.0
+        download_start = time.time()
         part_number = 0
-        while True:
-            part_number += 1
-            download_start = time.time()
-            try:
-                file_part = next(file_parts)
-            except StopIteration:
-                break
+        for (part_number, file_part) in enumerate(file_parts):
             target.write(file_part)
-            duration = duration + time.time() - download_start
+            duration = time.time() - download_start
             average = (PART_SIZE / 1024**2) / (duration / part_number)
             print(
                 f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
