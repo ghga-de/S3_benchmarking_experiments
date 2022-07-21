@@ -36,7 +36,7 @@ from hexkit.providers.s3.testutils import (  # type: ignore
 from testcontainers.localstack import LocalStackContainer  # type: ignore
 
 DATA_DIR = Path(__file__).parent.parent.resolve() / "example_data"
-OBJECT_IDS = ["1G.fasta"]
+OBJECT_IDS = ["10G.fasta", "50G.fasta", "150.fasta"]
 FILE_PATHS = [DATA_DIR / object_id for object_id in OBJECT_IDS]
 PART_SIZE = 16 * 1024 * 1024
 
@@ -111,6 +111,7 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
     )
     # refactor this
     # Clean up multipart upload if we run into any exception here
+    total_parts = 0
     try:
         with open(path, "r+b") as source:
             duration = 0.0
@@ -131,6 +132,7 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
                     f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
                     end="",
                 )
+                total_parts = part_number
     except:  # pylint: disable=bare-except
         await object_storage.abort_multipart_upload(
             upload_id=upload_id, bucket_id=bucket_id, object_id=object_id
@@ -138,7 +140,11 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
         sys.exit(f"\nMultipart upload {upload_id} aborted")
     print("\nCompleting multipart upload")
     await object_storage.complete_multipart_upload(
-        upload_id=upload_id, bucket_id=bucket_id, object_id=object_id
+        upload_id=upload_id,
+        bucket_id=bucket_id,
+        object_id=object_id,
+        anticipated_part_quantity=total_parts,
+        anticipated_part_size=PART_SIZE,
     )
 
 
