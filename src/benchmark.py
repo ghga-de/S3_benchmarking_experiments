@@ -16,7 +16,6 @@
 
 import argparse
 import asyncio
-import filecmp
 import os
 import sys
 import time
@@ -199,8 +198,6 @@ async def download_object(
             )
     print("\nRunning cleanup ...")
     await object_storage.delete_object(bucket_id=bucket_id, object_id=object_id)
-    if not filecmp.cmp(input_path, output_path):
-        print(f"Input and output different for {input_path}", file=sys.stderr)
     os.remove(output_path)
 
 
