@@ -131,7 +131,7 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
                     end="",
                 )
                 total_parts = part_number
-    except Exception as exc:  # pylint: disable=bare-except
+    except (Exception, KeyboardInterrupt) as exc:  # pylint: disable=bare-except
         # clean up multipart upload for next try, if we run into issues
         # makes running this in a loop easier
         await object_storage.abort_multipart_upload(
