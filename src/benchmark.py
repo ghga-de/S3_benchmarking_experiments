@@ -41,7 +41,7 @@ PART_SIZE = 16 * 1024 * 1024
 
 
 def main():
-    """TODO"""
+    """Argument parsing and checking of correct environment files"""
     bucket_id = "ghga-file-io-benchmarking"
     cos = DATA_DIR / "s3_cos.env"
     ceph = DATA_DIR / "s3_ceph.env"
@@ -103,13 +103,12 @@ async def benchmark_upload(object_storage: S3ObjectStorage, bucket_id: str):
 
 
 async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: Path):
-    """TODO"""
+    """Run and time upload of all parts"""
     object_id = os.path.basename(path)
     upload_id = await object_storage.init_multipart_upload(
         bucket_id=bucket_id, object_id=object_id
     )
-    # refactor this
-    # Clean up multipart upload if we run into any exception here
+
     upload_start = time.time()
     total_parts = 0
     try:
@@ -124,6 +123,7 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
                     part_number=part_number,
                 )
                 upload_file_part(presigned_url=part_upload_url, part=file_part)
+
                 duration = time.time() - upload_start
                 average = (PART_SIZE / 1024**2) / (duration / part_number)
                 print(
@@ -131,11 +131,14 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
                     end="",
                 )
                 total_parts = part_number
-    except:  # pylint: disable=bare-except
+    except Exception as exc:  # pylint: disable=bare-except
+        # clean up multipart upload for next try, if we run into issues
+        # makes running this in a loop easier
         await object_storage.abort_multipart_upload(
             upload_id=upload_id, bucket_id=bucket_id, object_id=object_id
         )
-        sys.exit(f"\nMultipart upload {upload_id} aborted")
+        print(f"\nMultipart upload {upload_id} aborted", file=sys.stderr)
+        raise exc
     print("\nCompleting multipart upload")
     await object_storage.complete_multipart_upload(
         upload_id=upload_id,
@@ -161,7 +164,7 @@ async def benchmark_download(object_storage: S3ObjectStorage, bucket_id: str):
 async def download_object(
     object_storage: S3ObjectStorage, bucket_id: str, object_id: str
 ):
-    """TODO"""
+    """Run and time download of all parts"""
     input_path = DATA_DIR / object_id
     file_size = input_path.stat().st_size
     download_url = await object_storage.get_object_download_url(
@@ -172,17 +175,17 @@ async def download_object(
     )
 
     output_path = DATA_DIR / input_path.name.replace(".fasta", "_dl.fasta")
+    download_start = time.time()
+    part_number = 0
+
     with open(
         output_path,
         "wb",
         buffering=PART_SIZE,
     ) as target:
-        # normally you'd use a for loop with enumerate, but we'd like to time
-        # the actual download function which is wrapped by the generator
-        download_start = time.time()
-        part_number = 0
         for (part_number, file_part) in enumerate(file_parts):
             target.write(file_part)
+
             duration = time.time() - download_start
             average = (PART_SIZE / 1024**2) / (duration / part_number)
             print(
