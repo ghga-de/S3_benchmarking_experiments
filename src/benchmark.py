@@ -35,7 +35,7 @@ from hexkit.providers.s3.testutils import (  # type: ignore
 from testcontainers.localstack import LocalStackContainer  # type: ignore
 
 DATA_DIR = Path(__file__).parent.parent.resolve() / "example_data"
-OBJECT_IDS = ["10G.fasta", "50G.fasta", "150.fasta"]
+OBJECT_IDS = ["10G.fasta", "50G.fasta", "150G.fasta"]
 FILE_PATHS = [DATA_DIR / object_id for object_id in OBJECT_IDS]
 PART_SIZE = 16 * 1024 * 1024
 
