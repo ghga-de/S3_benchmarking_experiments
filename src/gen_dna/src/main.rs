@@ -17,6 +17,8 @@ mod base_generator;
 mod nucleobase;
 
 use clap::{self, Parser};
+use regex::Regex;
+use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::base_generator::gen_content;
@@ -26,7 +28,7 @@ use crate::base_generator::gen_content;
 pub struct Cli {
     /// Approximate file size in GiB. Sets and overrides num_lines accordingly
     #[clap(short, long, value_parser)]
-    size: Option<u32>,
+    size: Option<String>,
     /// Num of non-header lines
     #[clap(short, long, value_parser, default_value_t = 1_000_000)]
     num_lines: usize,
@@ -41,9 +43,10 @@ pub struct Cli {
 fn main() {
     let mut args = Cli::parse();
 
-    if let Some(size) = args.size {
+    if let Some(ref size) = args.size {
         // Adjust number of lines so we get rougly the file size we want
-        args.num_lines = (size as usize * 1024usize.pow(3)) / (args.line_length + 1);
+        args.num_lines = (parse_size(size) / (args.line_length + 1) as f64).ceil() as usize;
+        println!("{}", &args.num_lines);
     }
 
     let start = Instant::now();
@@ -56,4 +59,24 @@ fn main() {
         elapsed.as_secs(),
         elapsed.as_millis() % 1000 / 10
     );
+}
+
+fn parse_size(size: &str) -> f64 {
+    let conversion: HashMap<&str, usize> = HashMap::from([
+        ("b", 1usize),
+        ("k", 1024usize),
+        ("m", 1024usize.pow(2)),
+        ("g", 1024usize.pow(3)),
+    ]);
+
+    let matcher = Regex::new(r"^(?P<value>\d+)(?P<modifier>\w)$").unwrap();
+    if let Some(captures) = matcher.captures(&size) {
+        let value = captures.name("value").unwrap().as_str();
+        let value = usize::from_str_radix(&value, 10).unwrap();
+        let modifier = captures.name("modifier").unwrap().as_str().to_lowercase();
+        let factor = conversion.get(&*modifier).unwrap();
+        (value * factor) as f64
+    } else {
+        panic!("Invalid input size: {}.", &size);
+    }
 }
