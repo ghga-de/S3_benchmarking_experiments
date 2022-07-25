@@ -46,7 +46,6 @@ fn main() {
     if let Some(ref size) = args.size {
         // Adjust number of lines so we get rougly the file size we want
         args.num_lines = (parse_size(size) / (args.line_length + 1) as f64).ceil() as usize;
-        println!("{}", &args.num_lines);
     }
 
     let start = Instant::now();

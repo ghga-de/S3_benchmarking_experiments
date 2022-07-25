@@ -189,7 +189,7 @@ async def download_object(
         "wb",
         buffering=PART_SIZE,
     ) as target:
-        for (part_number, file_part) in enumerate(file_parts):
+        for (part_number, file_part) in enumerate(file_parts, start=1):
             target.write(file_part)
 
             duration = time.time() - download_start
