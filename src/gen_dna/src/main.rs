@@ -74,7 +74,7 @@ fn parse_size(size: &str) -> f64 {
         let value = usize::from_str_radix(&value, 10).unwrap();
         let modifier = captures.name("modifier").unwrap().as_str().to_lowercase();
         let factor = conversion.get(&*modifier).expect(&format!(
-            "Unsupported modifier: {}.\nOne of {B,K,M,G} is required",
+            "Unsupported modifier: {}.\nOne of {{B,K,M,G}} is required",
             &modifier
         ));
         (value * factor) as f64
