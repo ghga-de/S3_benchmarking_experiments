@@ -69,7 +69,7 @@ def main():
 
 async def benchmark_remote(config: S3ConfigBase, bucket_id=str):
     """Run against a remote endpoint based on the given config"""
-    WithRetry.set_retries(3)
+    WithRetry.set_retries(4)
     storage = S3ObjectStorage(config=config)
     await run_benchmark(object_storage=storage, bucket_id=bucket_id)
 
@@ -131,7 +131,7 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
                 upload_file_part(presigned_url=part_upload_url, part=file_part)
 
                 duration = time.time() - upload_start
-                average = (PART_SIZE / 1024**2) / (duration / part_number)
+                average = part_number * (PART_SIZE / 1024**2) / duration
                 print(
                     f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
                     end="",
@@ -193,7 +193,7 @@ async def download_object(
             target.write(file_part)
 
             duration = time.time() - download_start
-            average = (PART_SIZE / 1024**2) / (duration / part_number)
+            average = part_number * (PART_SIZE / 1024**2) / duration
             print(
                 f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
                 end="",
