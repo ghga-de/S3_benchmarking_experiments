@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
+use crate::Cli;
 use rand;
 use std::{
     fs::{self, File},
@@ -21,8 +21,6 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-use crate::Cli;
-
 
 use crate::nucleobase::Nucleobase;
 
@@ -41,8 +39,7 @@ pub fn gen_content(args: &Cli) {
 
     // we need a buffered writer, else this gets really slow
     // initialising using with_capacity might help if buffer is too small
-    let mut target =
-        BufWriter::new(File::create(path.as_path()).expect("Could not create file."));
+    let mut target = BufWriter::new(File::create(path.as_path()).expect("Could not create file."));
 
     // header
     target

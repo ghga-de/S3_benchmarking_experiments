@@ -35,8 +35,8 @@ from hexkit.providers.s3.testutils import (  # type: ignore
 from testcontainers.localstack import LocalStackContainer  # type: ignore
 
 DATA_DIR = Path(__file__).parent.parent.resolve() / "example_data"
-OBJECT_IDS = ["10G.fasta", "50G.fasta", "150G.fasta"]
-FILE_PATHS = [DATA_DIR / object_id for object_id in OBJECT_IDS]
+OBJECT_IDS = [fasta for fasta in os.listdir(DATA_DIR) if fasta.endswith(".fasta")]
+FILE_PATHS = [DATA_DIR / fasta for fasta in OBJECT_IDS]
 PART_SIZE = 16 * 1024 * 1024
 
 
@@ -69,10 +69,9 @@ def main():
 
 async def benchmark_remote(config: S3ConfigBase, bucket_id=str):
     """Run against a remote endpoint based on the given config"""
-    WithRetry.set_retries(3)
-    object_storage = S3ObjectStorage(config=config)
-    await benchmark_upload(object_storage=object_storage, bucket_id=bucket_id)
-    await benchmark_download(object_storage=object_storage, bucket_id=bucket_id)
+    WithRetry.set_retries(4)
+    storage = S3ObjectStorage(config=config)
+    await run_benchmark(object_storage=storage, bucket_id=bucket_id)
 
 
 async def benchmark_localstack(bucket_id: str):
@@ -85,21 +84,28 @@ async def benchmark_localstack(bucket_id: str):
         config = config_from_localstack_container(localstack)
         storage = S3ObjectStorage(config=config)
         await storage.create_bucket(bucket_id)
-        await benchmark_upload(object_storage=storage, bucket_id=bucket_id)
-        await benchmark_download(object_storage=storage, bucket_id=bucket_id)
+        await run_benchmark(object_storage=storage, bucket_id=bucket_id)
         await storage.delete_bucket(bucket_id)
 
 
-async def benchmark_upload(object_storage: S3ObjectStorage, bucket_id: str):
-    """Call and time actual upload per file"""
-    for path in FILE_PATHS:
-        print(f"Uploading file {path}")
-        upload_start = time.time()
-        await upload_object(
+async def run_benchmark(object_storage: str, bucket_id: str):
+    """Delegate running up-/donwload"""
+    for path, object_id in zip(FILE_PATHS, OBJECT_IDS):
+        await benchmark_upload(
             object_storage=object_storage, bucket_id=bucket_id, path=path
         )
-        elapsed = time.time() - upload_start
-        print(f"Upload for file {path} finished in {elapsed:.2f}s")
+        await benchmark_download(
+            object_storage=object_storage, bucket_id=bucket_id, object_id=object_id
+        )
+
+
+async def benchmark_upload(object_storage: S3ObjectStorage, bucket_id: str, path: Path):
+    """Call and time actual upload per file"""
+    print(f"Uploading file {path}")
+    upload_start = time.time()
+    await upload_object(object_storage=object_storage, bucket_id=bucket_id, path=path)
+    elapsed = time.time() - upload_start
+    print(f"Upload for file {path} finished in {elapsed:.2f}s")
 
 
 async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: Path):
@@ -125,7 +131,7 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
                 upload_file_part(presigned_url=part_upload_url, part=file_part)
 
                 duration = time.time() - upload_start
-                average = (PART_SIZE / 1024**2) / (duration / part_number)
+                average = part_number * (PART_SIZE / 1024**2) / duration
                 print(
                     f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
                     end="",
@@ -149,16 +155,17 @@ async def upload_object(object_storage: S3ObjectStorage, bucket_id: str, path: P
     )
 
 
-async def benchmark_download(object_storage: S3ObjectStorage, bucket_id: str):
+async def benchmark_download(
+    object_storage: S3ObjectStorage, bucket_id: str, object_id: str
+):
     """Call and time actual download per file"""
-    for object_id in OBJECT_IDS:
-        print(f"Downloading object {object_id}")
-        upload_start = time.time()
-        await download_object(
-            object_storage=object_storage, bucket_id=bucket_id, object_id=object_id
-        )
-        elapsed = time.time() - upload_start
-        print(f"Download for object {object_id} finished in {elapsed:.2f}s")
+    print(f"Downloading object {object_id}")
+    upload_start = time.time()
+    await download_object(
+        object_storage=object_storage, bucket_id=bucket_id, object_id=object_id
+    )
+    elapsed = time.time() - upload_start
+    print(f"Download for object {object_id} finished in {elapsed:.2f}s")
 
 
 async def download_object(
@@ -176,18 +183,17 @@ async def download_object(
 
     output_path = DATA_DIR / input_path.name.replace(".fasta", "_dl.fasta")
     download_start = time.time()
-    part_number = 0
 
     with open(
         output_path,
         "wb",
         buffering=PART_SIZE,
     ) as target:
-        for (part_number, file_part) in enumerate(file_parts):
+        for (part_number, file_part) in enumerate(file_parts, start=1):
             target.write(file_part)
 
             duration = time.time() - download_start
-            average = (PART_SIZE / 1024**2) / (duration / part_number)
+            average = part_number * (PART_SIZE / 1024**2) / duration
             print(
                 f"\rAverage transfer rate: {average:.2f} MiB/s (Part number {part_number})",
                 end="",

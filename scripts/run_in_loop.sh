@@ -17,9 +17,9 @@
 
 set -e
 
+# either cos or ceph
+target=$1
+log_file=$2
 workspace=$(dirname $(dirname $(readlink -f "$0")))
 
-cd "$workspace"/src/gen_dna
-cargo build --release
-./target/release/gen_dna --file-name 4M --size 4M
-for size in 10 50 150; do ./target/release/gen_dna --file-name "$size"G --size "$size"G; done
+while true; do script -af -c "python "$workspace"/src/benchmark.py -t "$target"" "$log_file"; sleep 30; done
