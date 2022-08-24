@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""TODO"""
+"""Parse log file, print errors and summary stats for average transfer rates"""
 
 
 import argparse
@@ -23,7 +23,7 @@ import numpy as np  # type: ignore
 
 
 def main():
-    """TODO"""
+    """Process input file and print stats"""
     parser = argparse.ArgumentParser()
     parser.add_argument("infile", type=argparse.FileType("r"), nargs="?")
     args = parser.parse_args()
@@ -32,7 +32,7 @@ def main():
 
 
 def parse(file):
-    """TODO"""
+    """Convert log lines to dict and collect errors"""
     data = ddict(list)
     file_name = re.compile(r"Uploading file (.*)")
     object_name = re.compile(r"Downloading object (.*)")
@@ -59,7 +59,7 @@ def parse(file):
 
 
 def process(data: dict[str, list]):
-    """TODO"""
+    """Calculate summary stats for averages and print to stdout"""
     for key, value in data.items():
         if key == "errors":
             linebreak = "\n"
