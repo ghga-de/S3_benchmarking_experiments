@@ -26,6 +26,7 @@ def main():
     """Process input file and plot depending on direction (upload/download)"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--infile", "-i", type=argparse.FileType("r"))
+    parser.add_argument("--name", "-n", default="benchmark")
     args = parser.parse_args()
     data = parse_time(args.infile)
     keys = data.keys()
@@ -33,11 +34,11 @@ def main():
     ul_labels = sorted([key for key in keys if "/" in key])
     ul_timing = [data[label] for label in ul_labels]
     ul_labels = [label.rpartition("/")[2] for label in ul_labels]
-    plot(ul_labels, ul_timing, "upload")
+    plot(ul_labels, ul_timing, "upload", args.name)
 
     dl_labels = sorted([key for key in keys if "/" not in key])
     dl_timing = [data[label] for label in dl_labels]
-    plot(dl_labels, dl_timing, "download")
+    plot(dl_labels, dl_timing, "download", args.name)
 
 
 def parse_time(file):
@@ -58,7 +59,7 @@ def parse_time(file):
     return data
 
 
-def plot(labels: list[str], timing: list[list[float]], direction: str):
+def plot(labels: list[str], timing: list[list[float]], direction: str, name: str):
     """Plot timimings for all objects for one direction"""
 
     out_dir = Path(__file__).parent.parent / "output"
@@ -66,11 +67,19 @@ def plot(labels: list[str], timing: list[list[float]], direction: str):
         out_dir.mkdir()
 
     for label, vals in zip(labels, timing):
-        plt.plot(range(len(vals)), vals, ".")
-        plt.title(f"{label} ({direction})")
-        plt.xlabel("iteration")
-        plt.ylabel("time elapsed [s]")
-        plt.savefig(out_dir / f"{label}_{direction}.png")
+        if len(vals) > 50:
+            xticks = list(range(1, len(vals) + 1, 10))
+        elif len(vals) > 10:
+            xticks = list(range(1, len(vals) + 1, 5))
+        else:
+            xticks = list(range(1, len(vals) + 1))
+
+        plt.plot(range(1, len(vals) + 1), vals, "x")
+        plt.xticks(xticks, xticks, rotation=30)
+        plt.title(f"{label} ({direction.title()}) ({name})")
+        plt.xlabel("Iteration")
+        plt.ylabel("Time Elapsed [s]")
+        plt.savefig(out_dir / f"{label}_{direction}_{name.lower()}.png")
         plt.clf()
 
 
