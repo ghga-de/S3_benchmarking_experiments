@@ -133,3 +133,4 @@ dmypy.json
 
 example_data/*.fasta
 example_data/*.env
+output/
